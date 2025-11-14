@@ -54,7 +54,7 @@ async def health():
 @app.post("/upload")
 async def upload_video(req: UploadRequest):
     """
-    Загружает файл из Telegram в R2/S3
+    Загружает файл из Telegram в S3
     """
     logger.info(f"Получен запрос на загрузку: {req.file_url}")
     
@@ -74,33 +74,37 @@ async def upload_video(req: UploadRequest):
         filename = f"{uuid.uuid4()}.mp4"
         logger.info(f"Генерирую имя файла: {filename}")
         
-        # Загружаем в R2/S3
+        # Загружаем в S3
         logger.info(f"Начинаю загрузку в S3 bucket: {S3_BUCKET}")
         s3.upload_fileobj(
             response.raw, 
-            R2_BUCKET, 
+            S3_BUCKET,  # ✅ Исправлено!
             filename,
             ExtraArgs={'ContentType': 'video/mp4'}
         )
         logger.info("Файл успешно загружен в S3")
         
-        # Формируем публичный URL
-        # Для S3 используйте ваш custom domain или S3.dev URL
-        public_url = f"{R2_ENDPOINT}/{R2_BUCKET}/{filename}"
+        # Формируем публичный URL для AWS S3
+        # Вариант 1: Прямой URL (если bucket публичный)
+        public_url = f"{S3_ENDPOINT}/{filename}"  # ✅ Исправлено!
         
-        # Альтернатива: генерация presigned URL (временная ссылка)
-        # presigned_url = s3.generate_presigned_url(
-        #     'get_object',
-        #     Params={'Bucket': S3_BUCKET, 'Key': filename},
-        #     ExpiresIn=3600  # 1 час
-        # )
-        
-        logger.info(f"Файл доступен по URL: {public_url}")
+        # Вариант 2: Генерация presigned URL (временная ссылка - рекомендуется)
+        try:
+            presigned_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': S3_BUCKET, 'Key': filename},
+                ExpiresIn=3600 * 24 * 7  # 7 дней
+            )
+            logger.info(f"Файл доступен по presigned URL: {presigned_url}")
+            file_url = presigned_url  # Используем presigned URL
+        except Exception as e:
+            logger.warning(f"Не удалось создать presigned URL: {e}")
+            file_url = public_url  # Fallback на публичный URL
         
         return {
             "status": "ok",
             "filename": filename,
-            "file_url": public_url,
+            "file_url": file_url,
             "bucket": S3_BUCKET
         }
         
@@ -134,7 +138,8 @@ async def test_s3():
         return {
             "status": "ok",
             "message": "S3 подключение работает",
-            "bucket": S3_BUCKET
+            "bucket": S3_BUCKET,
+            "endpoint": S3_ENDPOINT
         }
     except ClientError as e:
         logger.error(f"Ошибка S3: {e}")
