@@ -34,9 +34,8 @@ def tg_stream_download(file_path):
 
 @app.post("/upload")
 def upload_video(payload: dict):
-    file_id = payload["file_id"]
+    file_url = payload["file_url"]
 
-    file_path = tg_get_file_path(file_id)
     filename = file_path.split("/")[-1]
 
     stream = tg_stream_download(file_path)
