@@ -15,12 +15,12 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Проверка переменных окружения
-R2_ENDPOINT = os.getenv("R2_ENDPOINT")
-R2_BUCKET = os.getenv("R2_BUCKET")
-R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY")
-R2_SECRET_KEY = os.getenv("R2_SECRET_KEY")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT")
+S3_BUCKET = os.getenv("S3_BUCKET")
+S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
+S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
 
-if not all([R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY, R2_SECRET_KEY]):
+if not all([S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY]):
     logger.error("Не все переменные окружения настроены!")
     raise ValueError("Missing required environment variables")
 
@@ -28,9 +28,9 @@ if not all([R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY, R2_SECRET_KEY]):
 try:
     s3 = boto3.client(
         "s3",
-        endpoint_url=R2_ENDPOINT,
-        aws_access_key_id=R2_ACCESS_KEY,
-        aws_secret_access_key=R2_SECRET_KEY,
+        endpoint_url=S3_ENDPOINT,
+        aws_access_key_id=S3_ACCESS_KEY,
+        aws_secret_access_key=S3_SECRET_KEY,
         config=Config(signature_version='s3v4')
     )
     logger.info("S3 клиент успешно инициализирован")
@@ -75,7 +75,7 @@ async def upload_video(req: UploadRequest):
         logger.info(f"Генерирую имя файла: {filename}")
         
         # Загружаем в R2/S3
-        logger.info(f"Начинаю загрузку в S3 bucket: {R2_BUCKET}")
+        logger.info(f"Начинаю загрузку в S3 bucket: {S3_BUCKET}")
         s3.upload_fileobj(
             response.raw, 
             R2_BUCKET, 
@@ -85,13 +85,13 @@ async def upload_video(req: UploadRequest):
         logger.info("Файл успешно загружен в S3")
         
         # Формируем публичный URL
-        # Для R2 используйте ваш custom domain или R2.dev URL
+        # Для S3 используйте ваш custom domain или S3.dev URL
         public_url = f"{R2_ENDPOINT}/{R2_BUCKET}/{filename}"
         
         # Альтернатива: генерация presigned URL (временная ссылка)
         # presigned_url = s3.generate_presigned_url(
         #     'get_object',
-        #     Params={'Bucket': R2_BUCKET, 'Key': filename},
+        #     Params={'Bucket': S3_BUCKET, 'Key': filename},
         #     ExpiresIn=3600  # 1 час
         # )
         
@@ -101,7 +101,7 @@ async def upload_video(req: UploadRequest):
             "status": "ok",
             "filename": filename,
             "file_url": public_url,
-            "bucket": R2_BUCKET
+            "bucket": S3_BUCKET
         }
         
     except requests.exceptions.RequestException as e:
@@ -130,11 +130,11 @@ async def test_s3():
     """Тестирование подключения к S3"""
     try:
         # Пробуем получить список объектов в bucket
-        response = s3.list_objects_v2(Bucket=R2_BUCKET, MaxKeys=1)
+        response = s3.list_objects_v2(Bucket=S3_BUCKET, MaxKeys=1)
         return {
             "status": "ok",
             "message": "S3 подключение работает",
-            "bucket": R2_BUCKET
+            "bucket": S3_BUCKET
         }
     except ClientError as e:
         logger.error(f"Ошибка S3: {e}")
