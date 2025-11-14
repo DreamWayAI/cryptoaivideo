@@ -1,14 +1,21 @@
 import os
 import requests
 import boto3
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from dotenv import load_dotenv
 
 load_dotenv()
 app = FastAPI()
+
 @app.get("/")
 def read_root():
     return {"status": "ok"}
+
+@app.post("/upload")
+async def upload(request: Request):
+    data = await request.json()
+    file_id = data.get("file_id")
+    return {"status": "ok", "received_file_id": file_id}
 
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
