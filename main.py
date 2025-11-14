@@ -1,54 +1,54 @@
-from fastapi import FastAPI, HTTPException
-import os
+from fastapi import FastAPI
 import requests
 import boto3
-from dotenv import load_dotenv
-
-load_dotenv()
+import uuid
+import os
 
 app = FastAPI()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-S3_BUCKET = os.getenv("S3_BUCKET")
+# настройки S3 / R2
 S3_ENDPOINT = os.getenv("S3_ENDPOINT")
-S3_KEY = os.getenv("S3_KEY")
+S3_BUCKET = os.getenv("S3_BUCKET")
+S3_ACCESS = os.getenv("S3_ACCESS")
 S3_SECRET = os.getenv("S3_SECRET")
 
 s3 = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
-    aws_access_key_id=S3_KEY,
+    aws_access_key_id=S3_ACCESS,
     aws_secret_access_key=S3_SECRET
 )
 
-def tg_get_file_path(file_id):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
-    r = requests.get(url)
-    if not r.ok:
-        raise HTTPException(status_code=400, detail="Cannot get file path")
-    return r.json()["result"]["file_path"]
-
-def tg_stream_download(file_path):
-    url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-    return requests.get(url, stream=True)
-
 @app.post("/upload")
-def upload_video(payload: dict):
+async def upload_video(payload: dict):
     file_url = payload["file_url"]
 
-    filename = file_path.split("/")[-1]
+    # генерация имени файла
+    filename = f"{uuid.uuid4()}.mp4"
 
-    stream = tg_stream_download(file_path)
+    # скачиваем видео из Telegram
+    response = requests.get(file_url, stream=True)
 
-    s3.upload_fileobj(stream.raw, S3_BUCKET, filename)
+    if response.status_code != 200:
+        return {"error": "cannot download file"}
 
-    video_url = f"{S3_ENDPOINT}/{S3_BUCKET}/{filename}"
+    # сохраняем локально временно
+    temp_path = f"/tmp/{filename}"
+
+    with open(temp_path, "wb") as f:
+        for chunk in response.iter_content(1024 * 1024):
+            f.write(chunk)
+
+    # загрузка в S3
+    s3.upload_file(temp_path, S3_BUCKET, filename)
+
+    # удаляем временный файл
+    os.remove(temp_path)
+
+    # публичная ссылка
+    file_link = f"{S3_ENDPOINT}/{S3_BUCKET}/{filename}"
 
     return {
         "status": "ok",
-        "url": video_url
+        "file": file_link
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
