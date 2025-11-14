@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 app = FastAPI()
+@app.get("/")
+def root():
+    return {"status": "ok"}
+
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 S3_BUCKET = os.getenv("S3_BUCKET")
